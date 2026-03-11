@@ -12,6 +12,7 @@ import (
 	"net/http"
 	"time"
 
+	"freedom/internal/schedule"
 	"freedom/internal/storage"
 )
 
@@ -46,6 +47,8 @@ type IndexData struct {
 	HasNext     bool
 	PrevPage    int
 	NextPage    int
+	Offline     bool   // true when outside schedule window
+	NextStartAt string // e.g. "06:00" — when pipeline resumes
 }
 
 // ArticleDetailData is the template data for the article detail page.
@@ -62,10 +65,11 @@ type Server struct {
 	logger   *slog.Logger
 	tmpl     *template.Template
 	httpPort string
+	sched    *schedule.Schedule
 }
 
 // NewServer creates a new web server wired to the given storage and SSE hub.
-func NewServer(store *storage.Client, hub *SSEHub, httpPort string, logger *slog.Logger) *Server {
+func NewServer(store *storage.Client, hub *SSEHub, httpPort string, sched *schedule.Schedule, logger *slog.Logger) *Server {
 	tmpl := template.Must(template.ParseFS(templateFS, "templates/*.html"))
 
 	return &Server{
@@ -74,6 +78,7 @@ func NewServer(store *storage.Client, hub *SSEHub, httpPort string, logger *slog
 		logger:   logger,
 		tmpl:     tmpl,
 		httpPort: httpPort,
+		sched:    sched,
 	}
 }
 

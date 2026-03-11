@@ -15,6 +15,14 @@
 
     <div class="grain" aria-hidden="true"></div>
 
+    {{if .Offline}}
+    <div class="offline-banner">
+        L'&eacute;coute de Radio Freedom est en pause pour la nuit.
+        Les contenus ci-dessous ont &eacute;t&eacute; g&eacute;n&eacute;r&eacute;s durant la journ&eacute;e.
+        Reprise demain &agrave; {{.NextStartAt}} (heure de La R&eacute;union).
+    </div>
+    {{end}}
+
     <!-- Top Navigation -->
     <nav class="topbar">
         <a href="/" class="topbar-brand">

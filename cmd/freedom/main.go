@@ -52,10 +52,6 @@ func main() {
 		os.Exit(1)
 	}
 
-	// Create SSE hub and web server.
-	hub := web.NewSSEHub(logger)
-	server := web.NewServer(store, hub, cfg.HTTPPort, logger)
-
 	logger.Info("starting freedom",
 		"stream", cfg.StreamURL,
 		"chunk_duration", cfg.ChunkDuration,
@@ -83,6 +79,21 @@ func main() {
 			"timezone", cfg.ScheduleTimezone,
 		)
 	}
+
+	// Create SSE hub and web server (always-on, independent of schedule).
+	hub := web.NewSSEHub(logger)
+	server := web.NewServer(store, hub, cfg.HTTPPort, sched, logger)
+
+	// Start SSE hub.
+	go hub.Run(ctx)
+
+	// Start web server (always-on).
+	go func() {
+		if err := server.Run(ctx); err != nil {
+			logger.Error("web server error", "error", err)
+			os.Exit(1)
+		}
+	}()
 
 	// Run loop: wait for schedule window, run pipeline, repeat.
 	for {

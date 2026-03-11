@@ -54,6 +54,11 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 		NextPage:   page + 1,
 	}
 
+	if s.sched != nil && !s.sched.IsActive(time.Now()) {
+		data.Offline = true
+		data.NextStartAt = s.sched.NextStart(time.Now()).Format("15:04")
+	}
+
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")
 	if err := s.tmpl.ExecuteTemplate(w, "index.html", data); err != nil {
 		s.logger.Error("render index template", "error", err)
