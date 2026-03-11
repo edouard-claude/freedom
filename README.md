@@ -253,7 +253,7 @@ Ouvrir http://localhost:8080 pour le dashboard live.
 
 ```bash
 docker build -t freedom .
-docker run --env-file .env --dns 8.8.8.8 -p 8080:8080 freedom
+docker run --env-file .env -p 8080:8080 freedom
 ```
 
 Image finale : ~20 Mo (Alpine + binaire statique).
