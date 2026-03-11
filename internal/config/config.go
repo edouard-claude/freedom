@@ -39,6 +39,10 @@ type Config struct {
 	// Web
 	HTTPPort string
 
+	// Schedule
+	Schedule         string // "HH:MM-HH:MM" active window (empty = 24/7)
+	ScheduleTimezone string // IANA timezone (default: Indian/Reunion)
+
 	// Logging
 	LogLevel string
 }
@@ -74,6 +78,10 @@ func Parse() (Config, error) {
 	// Web
 	flag.StringVar(&cfg.HTTPPort, "http-port", "8080", "HTTP server port")
 
+	// Schedule
+	flag.StringVar(&cfg.Schedule, "schedule", "", "active window HH:MM-HH:MM (empty = 24/7)")
+	flag.StringVar(&cfg.ScheduleTimezone, "schedule-tz", "Indian/Reunion", "IANA timezone for schedule")
+
 	// Logging
 	flag.StringVar(&cfg.LogLevel, "log-level", "info", "log level (debug, info, warn, error)")
 
@@ -101,6 +109,20 @@ func Parse() (Config, error) {
 	}
 	if v := os.Getenv("S3_USE_SSL"); v == "true" || v == "1" {
 		cfg.S3UseSSL = true
+	}
+	if cfg.Schedule == "" {
+		cfg.Schedule = os.Getenv("SCHEDULE")
+	}
+	scheduleTZSet := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == "schedule-tz" {
+			scheduleTZSet = true
+		}
+	})
+	if !scheduleTZSet {
+		if v := os.Getenv("SCHEDULE_TZ"); v != "" {
+			cfg.ScheduleTimezone = v
+		}
 	}
 
 	// Validation.

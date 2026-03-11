@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log/slog"
 	"os"
 	"os/signal"
@@ -9,6 +10,7 @@ import (
 
 	"freedom/internal/config"
 	"freedom/internal/pipeline"
+	"freedom/internal/schedule"
 	"freedom/internal/storage"
 	"freedom/internal/web"
 )
@@ -64,14 +66,58 @@ func main() {
 		"classify_model", cfg.ClassifyModel,
 		"article_model", cfg.ArticleModel,
 		"http_port", cfg.HTTPPort,
+		"schedule", cfg.Schedule,
 	)
 
-	if err := pipeline.Run(ctx, cfg, store, hub, server, logger); err != nil {
-		if ctx.Err() != nil {
-			logger.Info("shutdown complete")
+	// Parse schedule if configured.
+	var sched *schedule.Schedule
+	if cfg.Schedule != "" {
+		s, err := schedule.Parse(cfg.Schedule, cfg.ScheduleTimezone)
+		if err != nil {
+			logger.Error("invalid schedule", "error", err)
+			os.Exit(1)
+		}
+		sched = &s
+		logger.Info("schedule configured",
+			"window", cfg.Schedule,
+			"timezone", cfg.ScheduleTimezone,
+		)
+	}
+
+	// Run loop: wait for schedule window, run pipeline, repeat.
+	for {
+		if err := runOnce(ctx, sched, cfg, store, hub, server, logger); err != nil {
+			if ctx.Err() != nil {
+				logger.Info("shutdown complete")
+				return
+			}
+			logger.Error("pipeline error", "error", err)
+			os.Exit(1)
+		}
+		// No schedule → single run, exit cleanly.
+		if sched == nil {
 			return
 		}
-		logger.Error("pipeline error", "error", err)
-		os.Exit(1)
 	}
+}
+
+func runOnce(ctx context.Context, sched *schedule.Schedule, cfg config.Config, store *storage.Client, hub *web.SSEHub, server *web.Server, logger *slog.Logger) error {
+	runCtx := ctx
+
+	if sched != nil {
+		if err := sched.WaitForWindow(ctx, logger); err != nil {
+			return err
+		}
+		var cancel context.CancelFunc
+		runCtx, cancel = sched.ContextUntil(ctx, logger)
+		defer cancel()
+	}
+
+	err := pipeline.Run(runCtx, cfg, store, hub, server, logger)
+	if err != nil && sched != nil && errors.Is(runCtx.Err(), context.DeadlineExceeded) {
+		// Schedule window ended — not a real error.
+		logger.Info("schedule window ended, waiting for next window")
+		return nil
+	}
+	return err
 }
