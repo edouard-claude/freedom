@@ -1,0 +1,55 @@
+{{define "article-card"}}
+<article class="article-card{{if .IsListenerCall}} article-entraide{{end}}">
+    {{if .HasCover}}
+    <a href="{{.DetailURL}}" class="article-cover-link">
+        <div class="article-cover">
+            <img src="{{.CoverURL}}" alt="{{.Title}}" loading="lazy">
+            <div class="cover-ai-badge">Image g&eacute;n&eacute;r&eacute;e par IA</div>
+            <div class="article-badge-wrap">
+                {{if .IsListenerCall}}
+                <span class="cat-badge cat-entraide">Entraide</span>
+                {{else}}
+                <span class="cat-badge cat-actu">Actu</span>
+                {{end}}
+            </div>
+        </div>
+    </a>
+    {{else}}
+    <div class="article-badge-wrap article-badge-inline">
+        {{if .IsListenerCall}}
+        <span class="cat-badge cat-entraide">Entraide</span>
+        {{else}}
+        <span class="cat-badge cat-actu">Actu</span>
+        {{end}}
+    </div>
+    {{end}}
+    <div class="article-content">
+        <h3 class="article-title"><a href="{{.DetailURL}}" class="article-title-link">{{.Title}}</a></h3>
+        {{if .Summary}}
+        <p class="article-summary">{{.Summary}}</p>
+        {{end}}
+        {{if .Body}}
+        <div class="article-expand">
+            <details>
+                <summary class="expand-trigger">{{if .IsListenerCall}}D&eacute;tail de l'appel{{else}}Lire l'article{{end}}</summary>
+                <div class="article-text">{{.Body}}</div>
+            </details>
+        </div>
+        {{end}}
+        <div class="article-audio">
+            <div class="audio-head">
+                <span class="audio-icon">&#9835;</span>
+                <span class="audio-label">Extrait source</span>
+                <span class="audio-loader" aria-hidden="true"></span>
+            </div>
+            <audio controls preload="none">
+                <source src="{{.AudioURL}}" type="audio/mpeg">
+            </audio>
+        </div>
+        <footer class="article-meta">
+            <time class="meta-time" datetime="{{.CreatedAtISO}}">{{.CreatedAt}}</time>
+            <code class="meta-model">{{.ModelUsed}}</code>
+        </footer>
+    </div>
+</article>
+{{end}}

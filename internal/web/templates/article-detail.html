@@ -1,0 +1,208 @@
+{{define "article-detail.html"}}
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{{.Article.Title}} &mdash; Freedom Radio AI</title>
+    <meta name="description" content="{{.Article.Summary}}">
+    <meta name="robots" content="index, follow, max-image-preview:large">
+    <meta name="news_keywords" content="La R&eacute;union, Radio Freedom, actualit&eacute;">
+
+    <!-- Open Graph -->
+    <meta property="og:type" content="article">
+    <meta property="og:title" content="{{.Article.Title}}">
+    <meta property="og:description" content="{{.Article.Summary}}">
+    <meta property="og:url" content="{{.BaseURL}}{{.Article.DetailURL}}">
+    <meta property="og:site_name" content="Freedom Radio AI">
+    <meta property="og:locale" content="fr_FR">
+    {{if .Article.HasCover}}
+    <meta property="og:image" content="{{.BaseURL}}{{.Article.CoverURL}}">
+    {{end}}
+    <meta property="article:published_time" content="{{.Article.CreatedAtISO}}">
+    <meta property="article:section" content="{{.Article.Category}}">
+
+    <!-- Twitter Card -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="{{.Article.Title}}">
+    <meta name="twitter:description" content="{{.Article.Summary}}">
+    {{if .Article.HasCover}}
+    <meta name="twitter:image" content="{{.BaseURL}}{{.Article.CoverURL}}">
+    {{end}}
+
+    <!-- Canonical -->
+    <link rel="canonical" href="{{.BaseURL}}{{.Article.DetailURL}}">
+
+    <!-- Schema.org NewsArticle -->
+    <script type="application/ld+json">
+    {
+        "@context": "https://schema.org",
+        "@type": "NewsArticle",
+        "headline": "{{.Article.Title}}",
+        "description": "{{.Article.Summary}}",
+        "datePublished": "{{.Article.CreatedAtISO}}",
+        "url": "{{.BaseURL}}{{.Article.DetailURL}}",
+        {{if .Article.HasCover}}
+        "image": "{{.BaseURL}}{{.Article.CoverURL}}",
+        {{end}}
+        "author": {
+            "@type": "Organization",
+            "name": "Freedom Radio AI"
+        },
+        "publisher": {
+            "@type": "Organization",
+            "name": "Freedom Radio AI",
+            "logo": {
+                "@type": "ImageObject",
+                "url": "{{.BaseURL}}/static/logo.png"
+            }
+        },
+        "mainEntityOfPage": {
+            "@type": "WebPage",
+            "@id": "{{.BaseURL}}{{.Article.DetailURL}}"
+        },
+        "articleSection": "{{.Article.Category}}",
+        "inLanguage": "fr"
+    }
+    </script>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body class="detail-body">
+
+    <div class="grain" aria-hidden="true"></div>
+
+    <!-- Top Navigation -->
+    <nav class="topbar">
+        <a href="/" class="topbar-brand">
+            <img src="/static/logo.png" alt="Freedom" class="brand-logo">
+            <span class="brand-name">Freedom<span class="brand-ai">AI</span></span>
+        </a>
+        <a href="/" class="topbar-back">&larr; Retour au fil</a>
+    </nav>
+
+    <!-- Article Detail -->
+    <main class="detail-main">
+        <article class="detail-article" itemscope itemtype="https://schema.org/NewsArticle">
+            <meta itemprop="datePublished" content="{{.Article.CreatedAtISO}}">
+            <meta itemprop="author" content="Freedom Radio AI">
+
+            {{if .Article.HasCover}}
+            <div class="detail-cover">
+                <img src="{{.Article.CoverURL}}" alt="{{.Article.Title}}" itemprop="image">
+                <div class="cover-ai-badge">Image g&eacute;n&eacute;r&eacute;e par IA</div>
+            </div>
+            {{end}}
+
+            <div class="detail-content">
+                <div class="detail-badge-row">
+                    {{if .Article.IsListenerCall}}
+                    <span class="cat-badge cat-entraide">Entraide</span>
+                    {{else}}
+                    <span class="cat-badge cat-actu">Actu</span>
+                    {{end}}
+                    <time class="detail-time" datetime="{{.Article.CreatedAtISO}}">{{.Article.CreatedAt}}</time>
+                </div>
+
+                <h1 class="detail-title" itemprop="headline">{{.Article.Title}}</h1>
+
+                {{if .Article.Summary}}
+                <p class="detail-summary" itemprop="description">{{.Article.Summary}}</p>
+                {{end}}
+
+                <!-- AI Disclaimer -->
+                <div class="ai-disclaimer">
+                    <svg class="ai-disclaimer-icon" width="16" height="16" viewBox="0 0 16 16" fill="none">
+                        <circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.5"/>
+                        <path d="M8 4.5v4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/>
+                        <circle cx="8" cy="11" r="0.75" fill="currentColor"/>
+                    </svg>
+                    Cet article a &eacute;t&eacute; g&eacute;n&eacute;r&eacute; automatiquement par intelligence artificielle &agrave; partir du flux audio de Radio Freedom.
+                    Les informations peuvent contenir des inexactitudes.
+                </div>
+
+                {{if .Article.Body}}
+                <div class="detail-body-text" itemprop="articleBody">
+                    {{.Article.Body}}
+                </div>
+                {{end}}
+
+                <!-- Audio Player -->
+                <div class="article-audio">
+                    <div class="audio-head">
+                        <span class="audio-icon">&#9835;</span>
+                        <span class="audio-label">Extrait source</span>
+                        <span class="audio-loader" aria-hidden="true"></span>
+                    </div>
+                    <audio controls preload="none">
+                        <source src="{{.Article.AudioURL}}" type="audio/mpeg">
+                    </audio>
+                </div>
+
+                <!-- Metadata -->
+                <footer class="detail-meta">
+                    <div class="detail-meta-item">
+                        <span class="detail-meta-label">Mod&egrave;le</span>
+                        <code class="meta-model">{{.Article.ModelUsed}}</code>
+                    </div>
+                    <div class="detail-meta-item">
+                        <span class="detail-meta-label">Date</span>
+                        <time class="meta-time" datetime="{{.Article.CreatedAtISO}}">{{.Article.CreatedAt}}</time>
+                    </div>
+                </footer>
+
+                <!-- AI Reminder at bottom -->
+                <div class="ai-reminder">
+                    <strong>Rappel :</strong> Ce contenu est une d&eacute;monstration technique.
+                    L'article est g&eacute;n&eacute;r&eacute; par IA ({{.Article.ModelUsed}}) &agrave; partir de la transcription audio.
+                    {{if .Article.HasCover}}L'image de couverture est &eacute;galement g&eacute;n&eacute;r&eacute;e par IA.{{end}}
+                    V&eacute;rifiez toujours les informations aupr&egrave;s de sources officielles.
+                </div>
+            </div>
+        </article>
+
+        <!-- Related Articles -->
+        {{if .Related}}
+        <section class="related-section">
+            <h2 class="related-title">&Agrave; lire aussi</h2>
+            <div class="related-grid">
+                {{range .Related}}
+                {{template "article-card" .}}
+                {{end}}
+            </div>
+        </section>
+        {{end}}
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-inner">
+            <div class="footer-brand">Freedom Radio AI</div>
+            <div class="footer-stack">
+                Voxtral &middot; Mistral Medium &middot; Flux &mdash;
+                Propuls&eacute; par la suite Mistral AI
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Audio loading indicator
+        (function() {
+            var audios = document.querySelectorAll('.article-audio audio');
+            audios.forEach(function(audio) {
+                var wrap = audio.closest('.article-audio');
+                audio.addEventListener('play', function() { wrap.classList.add('is-loading'); });
+                audio.addEventListener('waiting', function() { wrap.classList.add('is-loading'); });
+                audio.addEventListener('canplay', function() { wrap.classList.remove('is-loading'); });
+                audio.addEventListener('playing', function() { wrap.classList.remove('is-loading'); });
+                audio.addEventListener('error', function() { wrap.classList.remove('is-loading'); });
+            });
+        })();
+    </script>
+
+</body>
+</html>
+{{end}}

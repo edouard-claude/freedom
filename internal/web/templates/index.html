@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Freedom Radio AI</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Young+Serif&family=Outfit:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="/static/style.css">
+    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
+    <script src="https://unpkg.com/htmx-ext-sse@2.2.2/sse.js"></script>
+</head>
+<body hx-ext="sse" sse-connect="/sse" data-mode="both">
+
+    <div class="grain" aria-hidden="true"></div>
+
+    <!-- Top Navigation -->
+    <nav class="topbar">
+        <a href="/" class="topbar-brand">
+            <img src="/static/logo.png" alt="Freedom" class="brand-logo">
+            <span class="brand-name">Freedom<span class="brand-ai">AI</span></span>
+        </a>
+        <div class="mode-switch" role="tablist" aria-label="Mode d'affichage">
+            <button class="mode-btn active" data-mode="both" role="tab" aria-selected="true">Tout</button>
+            <button class="mode-btn" data-mode="listen" role="tab" aria-selected="false">&Eacute;couter</button>
+            <button class="mode-btn" data-mode="read" role="tab" aria-selected="false">Lire</button>
+        </div>
+        <div class="topbar-live">
+            <span class="live-pulse"></span>
+            <span class="live-text">En direct</span>
+        </div>
+    </nav>
+
+    <!-- Radio Player -->
+    <section class="player" id="player-section">
+        <div class="player-glow" aria-hidden="true"></div>
+        <div class="player-content">
+            <div class="player-viz" aria-hidden="true">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+            </div>
+            <div class="player-meta">
+                <div class="player-badge">LIVE</div>
+                <h1 class="player-title">Radio Freedom</h1>
+                <p class="player-sub">La R&eacute;union &mdash; Transcription AI en temps r&eacute;el</p>
+            </div>
+            <div class="player-audio">
+                <audio id="radio-player" controls autoplay>
+                    <source src="https://freedomice.streamakaci.com/freedom.mp3" type="audio/mpeg">
+                    Votre navigateur ne supporte pas la lecture audio.
+                </audio>
+            </div>
+        </div>
+    </section>
+
+    <!-- Live Transcript -->
+    <section class="transcript" id="transcript-section">
+        <div class="transcript-inner">
+            <div class="transcript-bar">
+                <div class="transcript-label">
+                    <span class="transcript-pulse"></span>
+                    Transcription en direct
+                </div>
+            </div>
+            <div id="transcript-feed" class="transcript-feed" sse-swap="transcript" hx-swap="beforeend"></div>
+        </div>
+    </section>
+
+    <!-- Articles -->
+    <main id="articles-section">
+        <div class="articles-header">
+            <h2 class="articles-title">Fil d'actualit&eacute;</h2>
+            <p class="articles-sub">D&eacute;tection automatique &middot; Articles g&eacute;n&eacute;r&eacute;s par IA</p>
+        </div>
+        <div id="articles" class="articles-feed" sse-swap="article" hx-swap="afterbegin">
+            {{if .Articles}}
+                {{range .Articles}}
+                    {{template "article-card" .}}
+                {{end}}
+            {{else}}
+                <div class="empty-state" id="empty-state">
+                    <div class="empty-ring"></div>
+                    <p class="empty-title">En attente des premiers articles</p>
+                    <p class="empty-sub">Le pipeline &eacute;coute Radio Freedom et d&eacute;tecte les sujets d'actualit&eacute;.</p>
+                </div>
+            {{end}}
+        </div>
+
+        {{if gt .TotalPages 1}}
+        <nav class="pagination" aria-label="Pagination">
+            {{if .HasPrev}}
+            <a href="/?page={{.PrevPage}}" class="pagination-btn pagination-prev">&larr; Pr&eacute;c&eacute;dent</a>
+            {{else}}
+            <span class="pagination-btn pagination-prev disabled">&larr; Pr&eacute;c&eacute;dent</span>
+            {{end}}
+
+            <span class="pagination-info">Page {{.Page}} / {{.TotalPages}}</span>
+
+            {{if .HasNext}}
+            <a href="/?page={{.NextPage}}" class="pagination-btn pagination-next">Suivant &rarr;</a>
+            {{else}}
+            <span class="pagination-btn pagination-next disabled">Suivant &rarr;</span>
+            {{end}}
+        </nav>
+        {{end}}
+    </main>
+
+    <!-- Disclaimer -->
+    <aside class="disclaimer">
+        <div class="disclaimer-inner">
+            <p>
+                <strong>D&eacute;monstration technique</strong> &mdash;
+                Les articles sont g&eacute;n&eacute;r&eacute;s par intelligence artificielle (Mistral AI)
+                &agrave; partir du flux audio public de Radio Freedom (La R&eacute;union).
+                Ce site n'est pas un organe de presse.
+                Les contenus peuvent contenir des inexactitudes.
+                Le segment audio source est fourni pour chaque article &agrave; des fins de transparence.
+            </p>
+        </div>
+    </aside>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="footer-inner">
+            <div class="footer-brand">Freedom Radio AI</div>
+            <div class="footer-stack">
+                Voxtral &middot; Mistral Medium &middot; Flux &mdash;
+                Propuls&eacute; par la suite Mistral AI
+            </div>
+        </div>
+    </footer>
+
+    <script>
+        // Mode toggle
+        (function() {
+            var body = document.body;
+            var buttons = document.querySelectorAll('.mode-btn');
+
+            buttons.forEach(function(btn) {
+                btn.addEventListener('click', function() {
+                    buttons.forEach(function(b) {
+                        b.classList.remove('active');
+                        b.setAttribute('aria-selected', 'false');
+                    });
+                    btn.classList.add('active');
+                    btn.setAttribute('aria-selected', 'true');
+                    body.setAttribute('data-mode', btn.getAttribute('data-mode'));
+                });
+            });
+        })();
+
+        // Remove empty state when first article arrives via SSE
+        document.body.addEventListener('htmx:sseMessage', function() {
+            var empty = document.getElementById('empty-state');
+            if (empty) empty.remove();
+        });
+
+        // Trim transcript feed and auto-scroll
+        (function() {
+            var feed = document.getElementById('transcript-feed');
+            var MAX_CHARS = 2000;
+            feed.addEventListener('htmx:afterSwap', function() {
+                while (feed.textContent.length > MAX_CHARS && feed.firstChild) {
+                    feed.removeChild(feed.firstChild);
+                }
+                feed.scrollTop = feed.scrollHeight;
+            });
+        })();
+
+        // Audio loading indicator
+        (function() {
+            function bindAudioLoaders(root) {
+                var audios = (root || document).querySelectorAll('.article-audio audio');
+                audios.forEach(function(audio) {
+                    if (audio.dataset.loaderBound) return;
+                    audio.dataset.loaderBound = '1';
+                    var wrap = audio.closest('.article-audio');
+
+                    audio.addEventListener('play', function() { wrap.classList.add('is-loading'); });
+                    audio.addEventListener('waiting', function() { wrap.classList.add('is-loading'); });
+                    audio.addEventListener('canplay', function() { wrap.classList.remove('is-loading'); });
+                    audio.addEventListener('playing', function() { wrap.classList.remove('is-loading'); });
+                    audio.addEventListener('error', function() { wrap.classList.remove('is-loading'); });
+                });
+            }
+
+            bindAudioLoaders();
+            document.body.addEventListener('htmx:afterSwap', function() { bindAudioLoaders(); });
+        })();
+    </script>
+
+</body>
+</html>

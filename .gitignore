@@ -1,0 +1,16 @@
+# Binary (root only, not cmd/freedom/)
+/freedom
+
+# Credentials
+.env
+
+# Runtime data
+data/covers/
+data/segments/
+
+# Legacy root-level assets (embedded copies live in internal/web/)
+/static/
+/templates/
+
+# OS
+.DS_Store
