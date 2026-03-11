@@ -13,6 +13,8 @@ FROM alpine:3.21
 RUN apk add --no-cache ca-certificates tzdata
 COPY --from=build /freedom /usr/local/bin/freedom
 COPY creole_lexicon.jsonl /data/creole_lexicon.jsonl
+COPY entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
 
 EXPOSE 8080
-ENTRYPOINT ["freedom"]
+ENTRYPOINT ["/entrypoint.sh"]
