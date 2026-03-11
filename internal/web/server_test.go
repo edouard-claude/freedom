@@ -247,5 +247,5 @@ func TestHandleIndex_NoStore(t *testing.T) {
 	hub := NewSSEHub(logger)
 
 	// Verify template parsing works by creating server (will panic if templates are invalid).
-	_ = NewServer(nil, hub, "0", logger)
+	_ = NewServer(nil, hub, "0", nil, logger)
 }

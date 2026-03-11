@@ -168,16 +168,5 @@ func Run(ctx context.Context, cfg config.Config, store *storage.Client, hub *web
 		}
 	})
 
-	// SSE hub event loop.
-	g.Go(func() error {
-		hub.Run(gctx)
-		return nil
-	})
-
-	// Web server.
-	g.Go(func() error {
-		return server.Run(gctx)
-	})
-
 	return g.Wait()
 }

@@ -63,7 +63,7 @@ func TestIsActive(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(time.Date(2026, 3, 11, tc.hour, tc.min, 0, 0, loc).Format("15:04"), func(t *testing.T) {
 			ts := time.Date(2026, 3, 11, tc.hour, tc.min, 0, 0, loc)
-			if got := s.isActive(ts); got != tc.want {
+			if got := s.IsActive(ts); got != tc.want {
 				t.Fatalf("isActive(%s) = %v, want %v", ts.Format("15:04"), got, tc.want)
 			}
 		})
@@ -76,14 +76,14 @@ func TestNextStart(t *testing.T) {
 
 	// Before start → today 06:00
 	before := time.Date(2026, 3, 11, 4, 0, 0, 0, loc)
-	ns := s.nextStart(before)
+	ns := s.NextStart(before)
 	if ns.Hour() != 6 || ns.Day() != 11 {
 		t.Fatalf("expected today 06:00, got %v", ns)
 	}
 
 	// After start → tomorrow 06:00
 	after := time.Date(2026, 3, 11, 10, 0, 0, 0, loc)
-	ns = s.nextStart(after)
+	ns = s.NextStart(after)
 	if ns.Hour() != 6 || ns.Day() != 12 {
 		t.Fatalf("expected tomorrow 06:00, got %v", ns)
 	}

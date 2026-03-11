@@ -49,15 +49,15 @@ func Parse(raw, timezone string) (Schedule, error) {
 	}, nil
 }
 
-// isActive reports whether the given time falls within the schedule window.
-func (s Schedule) isActive(t time.Time) bool {
+// IsActive reports whether the given time falls within the schedule window.
+func (s Schedule) IsActive(t time.Time) bool {
 	t = t.In(s.Location)
 	mins := t.Hour()*60 + t.Minute()
 	return mins >= s.StartHour*60+s.StartMin && mins < s.EndHour*60+s.EndMin
 }
 
-// nextStart returns the next start time at or after t.
-func (s Schedule) nextStart(t time.Time) time.Time {
+// NextStart returns the next start time at or after t.
+func (s Schedule) NextStart(t time.Time) time.Time {
 	t = t.In(s.Location)
 	today := time.Date(t.Year(), t.Month(), t.Day(), s.StartHour, s.StartMin, 0, 0, s.Location)
 	if t.Before(today) {
@@ -80,11 +80,11 @@ func (s Schedule) nextEnd(t time.Time) time.Time {
 // Returns immediately if already within the active window.
 func (s Schedule) WaitForWindow(ctx context.Context, logger *slog.Logger) error {
 	now := time.Now()
-	if s.isActive(now) {
+	if s.IsActive(now) {
 		return nil
 	}
 
-	next := s.nextStart(now)
+	next := s.NextStart(now)
 	wait := time.Until(next)
 	logger.Info("outside schedule window, waiting",
 		"now", now.In(s.Location).Format("15:04"),
