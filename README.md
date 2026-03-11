@@ -1,5 +1,9 @@
 # Freedom — Pipeline IA de Journalisme Radio en Temps Réel
 
+<p align="center">
+  <img src="cover.jpg" alt="Freedom — Tour radio transformant les ondes en articles" width="600">
+</p>
+
 Pipeline Go concurrent à 8 étages qui écoute le flux MP3 live de [Radio Freedom](https://www.freedom.fr/) (La Réunion), transcrit l'audio, classifie le contenu, génère des articles d'actualité et des fiches d'entraide communautaire avec images de couverture, et diffuse le tout via une interface web temps réel — propulsé par Mistral AI (transcription, classification, rédaction) et FLUX.1-schnell (génération d'images).
 
 > **Avertissement** : Démonstration technique. Les articles générés ne constituent pas un contenu éditorial et peuvent contenir des inexactitudes. L'audio source est fourni avec chaque article par souci de transparence.
