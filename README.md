@@ -137,6 +137,14 @@ Pas de parsing JSON fragile ni de regex sur du texte libre — le modèle est co
 - **Fallback gracieux** : après 3 tentatives, génération d'une image placeholder 800×400 grise. L'absence de `HF_TOKEN` retourne le placeholder immédiatement — jamais bloquant
 - **Prompts éditoriaux** : style "dessin à l'encre bleue sur papier blanc", sans texte superposé, sans visages identifiables
 
+### Scheduling — Contrôle des Coûts API
+
+- **Fenêtre quotidienne** : `SCHEDULE=06:00-20:00` limite l'activité du pipeline aux heures configurées (timezone `Indian/Reunion` par défaut, UTC+4)
+- **Attente sans consommation** : hors créneau, le process bloque sur un `time.After` — zéro appel API, zéro CPU
+- **Boucle jour/jour** : à la fin de la fenêtre, le context `DeadlineExceeded` arrête proprement le pipeline, puis le process attend le prochain créneau
+- **Distinction précise** : `errors.Is(ctx.Err(), context.DeadlineExceeded)` sépare l'expiration du schedule d'un SIGINT — les vrais erreurs pipeline ne sont jamais avalées silencieusement
+- **Sans schedule** : comportement 24/7 inchangé (single run)
+
 ## Modèles IA
 
 | Rôle | Modèle | Fournisseur | Température | Max tokens |
@@ -241,6 +249,15 @@ source .env && ./freedom
 
 Ouvrir http://localhost:8080 pour le dashboard live.
 
+### Docker
+
+```bash
+docker build -t freedom .
+docker run --env-file .env -p 8080:8080 freedom
+```
+
+Image finale : ~20 Mo (Alpine + binaire statique).
+
 ## Configuration
 
 Tous les paramètres sont configurables via flags ou variables d'environnement.
@@ -254,6 +271,8 @@ Tous les paramètres sont configurables via flags ou variables d'environnement.
 | `S3_ENDPOINT` | **Requis.** Endpoint MinIO/S3 (ex. `localhost:9000`) |
 | `S3_ACCESS_KEY` | Clé d'accès S3 |
 | `S3_SECRET_KEY` | Clé secrète S3 |
+| `SCHEDULE` | Fenêtre horaire active `HH:MM-HH:MM` (optionnel — vide = 24/7) |
+| `SCHEDULE_TZ` | Timezone IANA pour le schedule (défaut : `Indian/Reunion`) |
 
 ### Flags
 
@@ -272,6 +291,8 @@ Tous les paramètres sont configurables via flags ou variables d'environnement.
 | `-s3-bucket` | `freedom` | Nom du bucket S3 |
 | `-s3-use-ssl` | `false` | TLS pour S3 |
 | `-http-port` | `8080` | Port du serveur web |
+| `-schedule` | *(vide)* | Fenêtre active `HH:MM-HH:MM` (vide = 24/7) |
+| `-schedule-tz` | `Indian/Reunion` | Timezone IANA pour le schedule |
 | `-log-level` | `info` | Niveau de log (debug, info, warn, error) |
 
 ## Structure du Projet
@@ -291,6 +312,7 @@ freedom/
 │   ├── article/                  # Accumulateur, générateur, writer
 │   ├── storage/                  # Client S3/MinIO, format Markdown
 │   ├── output/                   # Réordonnanceur par numéro de séquence
+│   ├── schedule/                 # Fenêtre horaire quotidienne (wait/deadline)
 │   ├── pipeline/                 # Orchestration 8 étages errgroup
 │   └── web/                      # Serveur HTMX + SSE
 │       ├── templates/            # Go html/template (index + carte article)
