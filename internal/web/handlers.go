@@ -57,6 +57,10 @@ func (s *Server) handleIndex(w http.ResponseWriter, r *http.Request) {
 	if s.sched != nil && !s.sched.IsActive(time.Now()) {
 		data.Offline = true
 		data.NextStartAt = s.sched.NextStart(time.Now()).Format("15:04")
+	} else if !s.IsPipelineRunning() {
+		// Cosmetic race: pipeline may start between this check and render.
+		// SSE status events correct the UI immediately after page load.
+		data.PipelineIdle = true
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

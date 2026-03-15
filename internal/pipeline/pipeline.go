@@ -25,7 +25,8 @@ import (
 )
 
 // Run wires up all pipeline stages and blocks until shutdown.
-func Run(ctx context.Context, cfg config.Config, store *storage.Client, hub *web.SSEHub, server *web.Server, logger *slog.Logger) error {
+// statusFunc, if non-nil, is called to report pipeline startup progress.
+func Run(ctx context.Context, cfg config.Config, store *storage.Client, hub *web.SSEHub, server *web.Server, logger *slog.Logger, statusFunc func(string)) error {
 	// Load creole lexicon if configured.
 	var contextBias []string
 	var fewShotPrompt string
@@ -38,6 +39,10 @@ func Run(ctx context.Context, cfg config.Config, store *storage.Client, hub *web
 			fewShotPrompt = lex.FewShotPrompt()
 			logger.Info("creole lexicon loaded", "entries", lex.Len(), "bias_words", len(contextBias))
 		}
+	}
+
+	if statusFunc != nil {
+		statusFunc("Initialisation du pipeline...")
 	}
 
 	bufPool := pool.New(32 * 1024)
@@ -88,6 +93,10 @@ func Run(ctx context.Context, cfg config.Config, store *storage.Client, hub *web
 	// the trim response is ~20 tokens, same model/config is appropriate.
 	articleGen := article.NewGenerator(classifier, articleChat, classifyChat, imager, store, cfg.ArticleModel, fewShotPrompt, logger, sseArticleCh)
 
+	if statusFunc != nil {
+		statusFunc("Connexion au flux radio...")
+	}
+
 	g, gctx := errgroup.WithContext(ctx)
 
 	// Stage 1: Icecast reader.
@@ -130,6 +139,7 @@ func Run(ctx context.Context, cfg config.Config, store *storage.Client, hub *web
 
 	// Stage 8a: Transcript SSE relay.
 	g.Go(func() error {
+		firstTranscript := true
 		for {
 			select {
 			case <-gctx.Done():
@@ -137,6 +147,10 @@ func Run(ctx context.Context, cfg config.Config, store *storage.Client, hub *web
 			case text, ok := <-transcriptCh:
 				if !ok {
 					return nil
+				}
+				if firstTranscript && statusFunc != nil {
+					statusFunc("Pipeline opérationnel — transcription en direct")
+					firstTranscript = false
 				}
 				hub.NotifyTranscript(`<span class="transcript-chunk">` + html.EscapeString(text) + ` </span>`)
 			}

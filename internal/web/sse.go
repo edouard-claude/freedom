@@ -22,6 +22,7 @@ type SSEHub struct {
 	unregister chan chan sseMessage
 	broadcast  chan sseMessage
 	countReq   chan chan int
+	presence   chan bool
 	logger     *slog.Logger
 }
 
@@ -33,6 +34,7 @@ func NewSSEHub(logger *slog.Logger) *SSEHub {
 		unregister: make(chan chan sseMessage),
 		broadcast:  make(chan sseMessage, 128),
 		countReq:   make(chan chan int),
+		presence:   make(chan bool, 16),
 		logger:     logger,
 	}
 }
@@ -53,14 +55,29 @@ func (h *SSEHub) Run(ctx context.Context) {
 			return
 
 		case ch := <-h.register:
+			wasEmpty := len(h.clients) == 0
 			h.clients[ch] = struct{}{}
 			h.logger.Info("sse client connected", "total", len(h.clients))
+			if wasEmpty {
+				select {
+				case h.presence <- true:
+				default:
+					h.logger.Warn("presence channel full, dropping wake signal")
+				}
+			}
 
 		case ch := <-h.unregister:
 			if _, ok := h.clients[ch]; ok {
 				close(ch)
 				delete(h.clients, ch)
 				h.logger.Info("sse client disconnected", "total", len(h.clients))
+				if len(h.clients) == 0 {
+					select {
+					case h.presence <- false:
+					default:
+						h.logger.Warn("presence channel full, dropping sleep signal")
+					}
+				}
 			}
 
 		case msg := <-h.broadcast:
@@ -72,6 +89,13 @@ func (h *SSEHub) Run(ctx context.Context) {
 					close(ch)
 					delete(h.clients, ch)
 					h.logger.Warn("sse client dropped (slow consumer)", "total", len(h.clients))
+					if len(h.clients) == 0 {
+						select {
+						case h.presence <- false:
+						default:
+							h.logger.Warn("presence channel full, dropping sleep signal")
+						}
+					}
 				}
 			}
 
@@ -86,6 +110,14 @@ func (h *SSEHub) Run(ctx context.Context) {
 				default:
 					close(ch)
 					delete(h.clients, ch)
+					h.logger.Warn("sse client dropped (slow consumer, keepalive)", "total", len(h.clients))
+					if len(h.clients) == 0 {
+						select {
+						case h.presence <- false:
+						default:
+							h.logger.Warn("presence channel full, dropping sleep signal")
+						}
+					}
 				}
 			}
 		}
@@ -94,10 +126,30 @@ func (h *SSEHub) Run(ctx context.Context) {
 
 // ClientCount returns the current number of connected SSE clients.
 // Safe to call from any goroutine (synchronized via the hub's event loop).
+// Returns 0 if the hub is not running (avoids deadlock).
 func (h *SSEHub) ClientCount() int {
 	resp := make(chan int, 1)
-	h.countReq <- resp
-	return <-resp
+	select {
+	case h.countReq <- resp:
+		return <-resp
+	case <-time.After(2 * time.Second):
+		return 0
+	}
+}
+
+// Presence returns a read-only channel that signals presence transitions.
+// true = first client connected (0→1), false = last client disconnected (N→0).
+func (h *SSEHub) Presence() <-chan bool {
+	return h.presence
+}
+
+// NotifyStatus sends a status message to all connected SSE clients.
+func (h *SSEHub) NotifyStatus(msg string) {
+	select {
+	case h.broadcast <- sseMessage{Event: "status", Data: msg}:
+	default:
+		h.logger.Warn("sse broadcast channel full, dropping status")
+	}
 }
 
 // Notify sends a new article HTML fragment to all connected SSE clients.
@@ -177,11 +229,10 @@ func (h *SSEHub) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// splitLines splits a string into lines, trimming any trailing \r for CRLF compat.
+// splitLines splits a string into lines on \n, \r\n, or bare \r (per SSE spec).
 func splitLines(s string) []string {
-	lines := strings.Split(s, "\n")
-	for i, line := range lines {
-		lines[i] = strings.TrimRight(line, "\r")
-	}
-	return lines
+	// Normalize bare \r to \n before splitting, so \r\n becomes \n\n → handled by Split.
+	s = strings.ReplaceAll(s, "\r\n", "\n")
+	s = strings.ReplaceAll(s, "\r", "\n")
+	return strings.Split(s, "\n")
 }

@@ -64,6 +64,15 @@
         </div>
     </section>
 
+    <!-- Pipeline Status -->
+    {{if .PipelineIdle}}
+    <div id="pipeline-status" class="pipeline-status" sse-swap="status" hx-swap="innerHTML">
+        En attente d'un visiteur pour d&eacute;marrer l'analyse...
+    </div>
+    {{else}}
+    <div id="pipeline-status" class="pipeline-status" sse-swap="status" hx-swap="innerHTML"></div>
+    {{end}}
+
     <!-- Live Transcript -->
     <section class="transcript" id="transcript-section">
         <div class="transcript-inner">
@@ -158,6 +167,18 @@
                     body.setAttribute('data-mode', btn.getAttribute('data-mode'));
                 });
             });
+        })();
+
+        // Pipeline status visibility
+        (function() {
+            var status = document.getElementById('pipeline-status');
+            if (!status) return;
+            var observer = new MutationObserver(function() {
+                status.style.display = status.textContent.trim() ? 'block' : 'none';
+            });
+            observer.observe(status, { childList: true, characterData: true, subtree: true });
+            // Initial state.
+            status.style.display = status.textContent.trim() ? 'block' : 'none';
         })();
 
         // Remove empty state when first article arrives via SSE
