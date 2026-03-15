@@ -2,11 +2,11 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log/slog"
 	"os"
 	"os/signal"
 	"syscall"
+	"time"
 
 	"freedom/internal/config"
 	"freedom/internal/pipeline"
@@ -95,40 +95,152 @@ func main() {
 		}
 	}()
 
-	// Run loop: wait for schedule window, run pipeline, repeat.
-	for {
-		if err := runOnce(ctx, sched, cfg, store, hub, server, logger); err != nil {
-			if ctx.Err() != nil {
+	// On-demand pipeline: driven by SSE client presence.
+	if sched == nil {
+		runOnDemand(ctx, nil, cfg, store, hub, server, logger)
+	} else {
+		for {
+			if err := sched.WaitForWindow(ctx, logger); err != nil {
 				logger.Info("shutdown complete")
 				return
 			}
-			logger.Error("pipeline error", "error", err)
-			os.Exit(1)
-		}
-		// No schedule → single run, exit cleanly.
-		if sched == nil {
-			return
+			schedCtx, schedCancel := sched.ContextUntil(ctx, logger)
+			runOnDemand(schedCtx, sched, cfg, store, hub, server, logger)
+			schedCancel()
+			logger.Info("schedule window ended, waiting for next window")
 		}
 	}
 }
 
-func runOnce(ctx context.Context, sched *schedule.Schedule, cfg config.Config, store *storage.Client, hub *web.SSEHub, server *web.Server, logger *slog.Logger) error {
-	runCtx := ctx
+const gracePeriod = 3 * time.Minute
 
-	if sched != nil {
-		if err := sched.WaitForWindow(ctx, logger); err != nil {
-			return err
+// runOnDemand starts/stops the pipeline based on SSE client presence.
+// It blocks until ctx is cancelled (schedule end or shutdown).
+func runOnDemand(ctx context.Context, sched *schedule.Schedule, cfg config.Config, store *storage.Client, hub *web.SSEHub, server *web.Server, logger *slog.Logger) {
+	var (
+		pipeCancel     context.CancelFunc
+		pipelineDone   chan error
+		running        bool
+		graceTimer     *time.Timer
+		pendingRestart bool
+	)
+
+	startPipeline := func() {
+		pipeCtx, cancel := context.WithCancel(ctx)
+		pipeCancel = cancel
+		pipelineDone = make(chan error, 1)
+		running = true
+		pendingRestart = false
+		server.SetPipelineRunning(true)
+		go func() {
+			pipelineDone <- pipeline.Run(pipeCtx, cfg, store, hub, server, logger, hub.NotifyStatus)
+		}()
+		logger.Info("pipeline started (visitor connected)")
+	}
+
+	schedActive := func() bool {
+		return sched == nil || sched.IsActive(time.Now())
+	}
+
+	notifyOffSchedule := func() {
+		hub.NotifyStatus("Hors plage horaire. Reprise à " + sched.NextStart(time.Now()).Format("15:04") + " (heure de La Réunion)")
+	}
+
+	// Check if clients are already connected at the start of this window.
+	if hub.ClientCount() > 0 {
+		if schedActive() {
+			startPipeline()
+		} else {
+			notifyOffSchedule()
 		}
-		var cancel context.CancelFunc
-		runCtx, cancel = sched.ContextUntil(ctx, logger)
-		defer cancel()
 	}
 
-	err := pipeline.Run(runCtx, cfg, store, hub, server, logger)
-	if err != nil && sched != nil && errors.Is(runCtx.Err(), context.DeadlineExceeded) {
-		// Schedule window ended — not a real error.
-		logger.Info("schedule window ended, waiting for next window")
-		return nil
+	// Drain stale presence signals queued during the ClientCount() check.
+	for {
+		select {
+		case <-hub.Presence():
+		default:
+			goto eventLoop
+		}
 	}
-	return err
+
+eventLoop:
+	for {
+		select {
+		case wake := <-hub.Presence():
+			if wake {
+				// Client connected (0→1 transition).
+				if running && graceTimer != nil {
+					if graceTimer.Stop() {
+						// Timer stopped before firing — pipeline still healthy.
+						graceTimer = nil
+						logger.Info("grace period cancelled, visitor reconnected")
+					} else {
+						// Timer already fired — pipeCancel() was called, pipeline is shutting down.
+						// Flag restart for when pipelineDone arrives.
+						graceTimer = nil
+						pendingRestart = true
+						logger.Info("grace period already expired, will restart pipeline after shutdown")
+					}
+				} else if !running {
+					if !schedActive() {
+						notifyOffSchedule()
+					} else {
+						startPipeline()
+					}
+				}
+			} else {
+				// Last client disconnected (N→0 transition).
+				if running {
+					cancel := pipeCancel
+					graceTimer = time.AfterFunc(gracePeriod, func() {
+						logger.Info("grace period expired, stopping pipeline")
+						cancel()
+					})
+					logger.Info("grace period started (3 min)")
+				}
+			}
+
+		case err := <-pipelineDone:
+			running = false
+			server.SetPipelineRunning(false)
+			if pipeCancel != nil {
+				pipeCancel()
+				pipeCancel = nil
+			}
+			if graceTimer != nil {
+				graceTimer.Stop()
+				graceTimer = nil
+			}
+			pipelineDone = nil
+			if ctx.Err() != nil {
+				return
+			}
+			if err != nil {
+				logger.Warn("pipeline stopped", "error", err)
+			} else {
+				logger.Info("pipeline stopped")
+			}
+			// Restart if a visitor reconnected while the pipeline was shutting down.
+			if pendingRestart {
+				pendingRestart = false
+				if schedActive() {
+					startPipeline()
+				}
+			}
+
+		case <-ctx.Done():
+			if graceTimer != nil {
+				graceTimer.Stop()
+			}
+			if pipeCancel != nil {
+				pipeCancel()
+			}
+			if running && pipelineDone != nil {
+				<-pipelineDone
+			}
+			server.SetPipelineRunning(false)
+			return
+		}
+	}
 }

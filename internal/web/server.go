@@ -8,8 +8,9 @@ import (
 	"html/template"
 	"io/fs"
 	"log/slog"
-	"strings"
 	"net/http"
+	"strings"
+	"sync/atomic"
 	"time"
 
 	"freedom/internal/schedule"
@@ -40,15 +41,16 @@ type ArticleView struct {
 
 // IndexData is the template data for the index page with pagination.
 type IndexData struct {
-	Articles    []ArticleView
-	Page        int
-	TotalPages  int
-	HasPrev     bool
-	HasNext     bool
-	PrevPage    int
-	NextPage    int
-	Offline     bool   // true when outside schedule window
-	NextStartAt string // e.g. "06:00" — when pipeline resumes
+	Articles     []ArticleView
+	Page         int
+	TotalPages   int
+	HasPrev      bool
+	HasNext      bool
+	PrevPage     int
+	NextPage     int
+	Offline      bool   // true when outside schedule window
+	NextStartAt  string // e.g. "06:00" — when pipeline resumes
+	PipelineIdle bool   // true when in schedule window but pipeline not running
 }
 
 // ArticleDetailData is the template data for the article detail page.
@@ -60,12 +62,13 @@ type ArticleDetailData struct {
 
 // Server serves the Freedom Radio AI web interface.
 type Server struct {
-	store    *storage.Client
-	hub      *SSEHub
-	logger   *slog.Logger
-	tmpl     *template.Template
-	httpPort string
-	sched    *schedule.Schedule
+	store           *storage.Client
+	hub             *SSEHub
+	logger          *slog.Logger
+	tmpl            *template.Template
+	httpPort        string
+	sched           *schedule.Schedule
+	pipelineRunning atomic.Bool
 }
 
 // NewServer creates a new web server wired to the given storage and SSE hub.
@@ -80,6 +83,16 @@ func NewServer(store *storage.Client, hub *SSEHub, httpPort string, sched *sched
 		httpPort: httpPort,
 		sched:    sched,
 	}
+}
+
+// SetPipelineRunning updates the pipeline running state.
+func (s *Server) SetPipelineRunning(running bool) {
+	s.pipelineRunning.Store(running)
+}
+
+// IsPipelineRunning reports whether the pipeline is currently running.
+func (s *Server) IsPipelineRunning() bool {
+	return s.pipelineRunning.Load()
 }
 
 // Run starts the HTTP server and blocks until ctx is cancelled,
