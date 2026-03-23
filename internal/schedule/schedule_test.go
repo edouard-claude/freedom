@@ -105,6 +105,25 @@ func TestWaitForWindowAlreadyActive(t *testing.T) {
 	}
 }
 
+func TestWaitForWindowCancelledDuringActive(t *testing.T) {
+	// Reproduces boot loop scenario: context cancelled while within active window.
+	s := Schedule{
+		StartHour: 0, StartMin: 0,
+		EndHour: 23, EndMin: 59,
+	}
+	loc, _ := time.LoadLocation("UTC")
+	s.Location = loc
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel() // pre-cancelled context
+
+	logger := slog.Default()
+	err := s.WaitForWindow(ctx, logger)
+	if err != context.Canceled {
+		t.Fatalf("expected context.Canceled, got %v", err)
+	}
+}
+
 func TestWaitForWindowCancelled(t *testing.T) {
 	// Build a schedule window that is guaranteed inactive right now:
 	// pick an hour range that excludes the current hour in UTC.

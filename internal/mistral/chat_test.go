@@ -7,8 +7,10 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
+	"time"
 )
 
 func testLogger() *slog.Logger {
@@ -246,6 +248,39 @@ func TestComplete_RetryOn429(t *testing.T) {
 	}
 }
 
+func TestComplete_RetryExhausted429(t *testing.T) {
+	var attempts atomic.Int32
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		attempts.Add(1)
+		w.Header().Set("Retry-After", "1")
+		w.WriteHeader(http.StatusTooManyRequests)
+		w.Write([]byte(`{"error":"rate limited"}`))
+	}))
+	defer srv.Close()
+
+	client := NewChatClient("test-key", "test-model", 0.3, 1000, testLogger())
+	client.http = srv.Client()
+	client.http.Transport = roundTripFunc(func(r *http.Request) (*http.Response, error) {
+		r.URL.Scheme = "http"
+		r.URL.Host = srv.Listener.Addr().String()
+		return http.DefaultTransport.RoundTrip(r)
+	})
+
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	_, err := client.Complete(ctx, "sys", "usr", nil)
+	if err == nil {
+		t.Fatal("expected error after exhausted 429 retries")
+	}
+	if !strings.Contains(err.Error(), "rate limited (429)") {
+		t.Fatalf("expected error to contain 'rate limited (429)', got: %v", err)
+	}
+	if got := attempts.Load(); got != 6 {
+		t.Fatalf("expected 6 attempts, got %d", got)
+	}
+}
+
 func TestComplete_RetryExhausted(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusInternalServerError)
@@ -261,7 +296,9 @@ func TestComplete_RetryExhausted(t *testing.T) {
 		return http.DefaultTransport.RoundTrip(r)
 	})
 
-	_, err := client.Complete(context.Background(), "sys", "usr", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, err := client.Complete(ctx, "sys", "usr", nil)
 	if err == nil {
 		t.Fatal("expected error after exhausted retries")
 	}
@@ -282,7 +319,9 @@ func TestComplete_NoChoices(t *testing.T) {
 		return http.DefaultTransport.RoundTrip(r)
 	})
 
-	_, err := client.Complete(context.Background(), "sys", "usr", nil)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, err := client.Complete(ctx, "sys", "usr", nil)
 	if err == nil {
 		t.Fatal("expected error for empty choices")
 	}

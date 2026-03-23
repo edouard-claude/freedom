@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log/slog"
@@ -14,8 +15,11 @@ import (
 
 const (
 	chatURL    = "https://api.mistral.ai/v1/chat/completions"
-	maxRetries = 3
+	maxRetries = 6
 )
+
+// ErrRateLimited is returned when the API responds with 429 Too Many Requests.
+var ErrRateLimited = errors.New("rate limited (429)")
 
 // ChatClient calls the Mistral Chat Completions API with support for
 // json_object and json_schema response formats.
@@ -100,7 +104,7 @@ func (c *ChatClient) Complete(ctx context.Context, system, user string, rf *Resp
 
 		wait := retryAfter
 		if wait == 0 {
-			wait = time.Duration(1<<uint(attempt)) * time.Second
+			wait = min(time.Duration(5<<uint(attempt))*time.Second, 60*time.Second)
 		}
 		c.logger.Warn("chat request failed, retrying",
 			"attempt", attempt+1, "error", err, "wait", wait)
@@ -145,7 +149,7 @@ func (c *ChatClient) doRequest(ctx context.Context, messages []Message, rf *Resp
 
 	if resp.StatusCode == http.StatusTooManyRequests {
 		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
-		return "", retryAfter, fmt.Errorf("rate limited (429)")
+		return "", retryAfter, ErrRateLimited
 	}
 	if resp.StatusCode >= 500 {
 		return "", 0, fmt.Errorf("server error (%d): %s", resp.StatusCode, string(respBody))
