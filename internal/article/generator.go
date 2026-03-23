@@ -3,6 +3,7 @@ package article
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log/slog"
 	"strings"
@@ -172,8 +173,9 @@ type Generator struct {
 	logger       *slog.Logger
 	modelName    string
 	fewShot      string // creole lexicon injected into article prompt
-	recentTopics []string
-	articleCh    chan<- storage.Article
+	recentTopics  []string
+	articleCh     chan<- storage.Article
+	cooldownUntil time.Time
 }
 
 // NewGenerator creates an article generator.
@@ -213,9 +215,18 @@ func (g *Generator) Run(ctx context.Context, windowCh <-chan Window) error {
 				return nil
 			}
 
+			if time.Now().Before(g.cooldownUntil) {
+				g.logger.Debug("article cooldown active, skipping window")
+				continue
+			}
+
 			art, err := g.processWindow(ctx, window)
 			if err != nil {
 				g.logger.Error("article generation failed", "error", err)
+				if errors.Is(err, mistral.ErrRateLimited) {
+					g.cooldownUntil = time.Now().Add(90 * time.Second)
+					g.logger.Warn("rate limited after retries, skipping next windows", "cooldown_until", g.cooldownUntil.Format("15:04:05"))
+				}
 				continue
 			}
 			if art == nil {

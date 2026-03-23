@@ -9,6 +9,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
+	"time"
 
 	"freedom/internal/mistral"
 )
@@ -155,7 +156,9 @@ func TestTrimAudio_LLMError(t *testing.T) {
 	}
 	window := Window{Text: "full", RawMP3: fullMP3, Segments: segs}
 
-	got := g.trimAudio(context.Background(), window, articleResponse{Title: "T", Summary: "S"})
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	got := g.trimAudio(ctx, window, articleResponse{Title: "T", Summary: "S"})
 	if string(got) != string(fullMP3) {
 		t.Fatal("expected fallback to full audio on LLM error")
 	}

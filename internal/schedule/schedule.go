@@ -79,9 +79,13 @@ func (s Schedule) nextEnd(t time.Time) time.Time {
 // WaitForWindow blocks until the schedule window is active, or ctx is cancelled.
 // Returns immediately if already within the active window.
 func (s Schedule) WaitForWindow(ctx context.Context, logger *slog.Logger) error {
+	if ctx.Err() != nil {
+		return ctx.Err()
+	}
+
 	now := time.Now()
 	if s.IsActive(now) {
-		return nil
+		return ctx.Err()
 	}
 
 	next := s.NextStart(now)
