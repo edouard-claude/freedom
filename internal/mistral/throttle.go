@@ -26,18 +26,20 @@ func NewThrottledTransport(interval time.Duration) *ThrottledTransport {
 
 // RoundTrip implements http.RoundTripper with rate limiting.
 func (t *ThrottledTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	t.mu.Lock()
-	if wait := t.interval - time.Since(t.last); wait > 0 {
+	for {
+		t.mu.Lock()
+		wait := t.interval - time.Since(t.last)
+		if wait <= 0 {
+			t.last = time.Now()
+			t.mu.Unlock()
+			return t.base.RoundTrip(req)
+		}
 		t.mu.Unlock()
+
 		select {
 		case <-time.After(wait):
 		case <-req.Context().Done():
 			return nil, req.Context().Err()
 		}
-		t.mu.Lock()
 	}
-	t.last = time.Now()
-	t.mu.Unlock()
-
-	return t.base.RoundTrip(req)
 }

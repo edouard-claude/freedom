@@ -149,6 +149,7 @@ func (c *ChatClient) doRequest(ctx context.Context, messages []Message, rf *Resp
 
 	if resp.StatusCode == http.StatusTooManyRequests {
 		retryAfter := parseRetryAfter(resp.Header.Get("Retry-After"))
+		c.logger.Warn("429 response detail", "body", string(respBody), "retry_after", resp.Header.Get("Retry-After"))
 		return "", retryAfter, ErrRateLimited
 	}
 	if resp.StatusCode >= 500 {
