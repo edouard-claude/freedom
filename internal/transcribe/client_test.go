@@ -153,7 +153,9 @@ func TestClient_TranscribeAllRetriesFail(t *testing.T) {
 		Duration: 5 * time.Second,
 	}
 
-	_, err := c.Transcribe(context.Background(), ch)
+	ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
+	defer cancel()
+	_, err := c.Transcribe(ctx, ch)
 	if err == nil {
 		t.Fatal("expected error after all retries fail")
 	}

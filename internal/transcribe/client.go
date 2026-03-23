@@ -44,6 +44,11 @@ func NewClient(apiKey, model, language string, contextBias []string, logger *slo
 	}
 }
 
+// SetHTTPClient replaces the underlying HTTP client (useful for testing and shared transport).
+func (c *Client) SetHTTPClient(hc *http.Client) {
+	c.http = hc
+}
+
 type apiResponse struct {
 	Text string `json:"text"`
 }
