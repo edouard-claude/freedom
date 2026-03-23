@@ -112,7 +112,10 @@ func main() {
 	}
 }
 
-const gracePeriod = 3 * time.Minute
+const (
+	gracePeriod      = 3 * time.Minute
+	minPipelineRun   = 20 * time.Minute
+)
 
 // runOnDemand starts/stops the pipeline based on SSE client presence.
 // It blocks until ctx is cancelled (schedule end or shutdown).
@@ -123,6 +126,7 @@ func runOnDemand(ctx context.Context, sched *schedule.Schedule, cfg config.Confi
 		running        bool
 		graceTimer     *time.Timer
 		pendingRestart bool
+		pipeStartedAt  time.Time
 	)
 
 	startPipeline := func() {
@@ -131,6 +135,7 @@ func runOnDemand(ctx context.Context, sched *schedule.Schedule, cfg config.Confi
 		pipelineDone = make(chan error, 1)
 		running = true
 		pendingRestart = false
+		pipeStartedAt = time.Now()
 		server.SetPipelineRunning(true)
 		go func() {
 			pipelineDone <- pipeline.Run(pipeCtx, cfg, store, hub, server, logger, hub.NotifyStatus)
@@ -192,12 +197,15 @@ eventLoop:
 			} else {
 				// Last client disconnected (N→0 transition).
 				if running {
+					// Ensure the pipeline runs for at least minPipelineRun so
+					// it has time to produce articles, even if the visitor leaves quickly.
+					delay := max(time.Until(pipeStartedAt.Add(minPipelineRun)), gracePeriod)
 					cancel := pipeCancel
-					graceTimer = time.AfterFunc(gracePeriod, func() {
-						logger.Info("grace period expired, stopping pipeline")
+					graceTimer = time.AfterFunc(delay, func() {
+						logger.Info("shutdown timer expired, stopping pipeline")
 						cancel()
 					})
-					logger.Info("grace period started (3 min)")
+					logger.Info("shutdown timer started", "delay", delay.Round(time.Second))
 				}
 			}
 
