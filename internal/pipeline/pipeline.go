@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"html"
 	"log/slog"
+	"net/http"
 	"time"
 
 	"golang.org/x/sync/errgroup"
@@ -73,8 +74,14 @@ func Run(ctx context.Context, cfg config.Config, store *storage.Client, hub *web
 		time.Duration(float64(time.Second)*cfg.Overlap),
 	)
 
+	// Shared rate-limited transport for all Mistral API calls (1 req/s global limit).
+	throttle := mistral.NewThrottledTransport(time.Second)
+	mistralHTTP := &http.Client{Timeout: 120 * time.Second, Transport: throttle}
+	transcribeHTTP := &http.Client{Timeout: 60 * time.Second, Transport: throttle}
+
 	// Stage 4: Transcription worker pool.
 	client := transcribe.NewClient(cfg.MistralAPIKey, cfg.TranscribeModel, cfg.Language, contextBias, logger)
+	client.SetHTTPClient(transcribeHTTP)
 	workerPool := transcribe.NewWorkerPool(client, cfg.Workers, logger)
 
 	// Stage 5: Output handler.
@@ -85,9 +92,11 @@ func Run(ctx context.Context, cfg config.Config, store *storage.Client, hub *web
 
 	// Stage 7 components: Classifier, chat client, image client.
 	classifyChat := mistral.NewChatClient(cfg.MistralAPIKey, cfg.ClassifyModel, 0, 512, logger)
+	classifyChat.SetHTTPClient(mistralHTTP)
 	classifier := classify.NewClassifier(classifyChat, logger)
 
 	articleChat := mistral.NewChatClient(cfg.MistralAPIKey, cfg.ArticleModel, 0.3, 2048, logger)
+	articleChat.SetHTTPClient(mistralHTTP)
 	imager := mistral.NewImageClient(cfg.HFToken, logger)
 	// trimChat reuses classifyChat (mistral-small, temp=0, maxTokens=512) by design:
 	// the trim response is ~20 tokens, same model/config is appropriate.
